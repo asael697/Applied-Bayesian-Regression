@@ -2,9 +2,9 @@
 
 Este repositorio presenta el contenido y cuadernos para la clase de Modelos lineales para la Maestría en Matemática, tercer periodo del año 2021. 
 
-  + [Notebooks](https://github.com/asael697/Appplied-Bayesian-Regression/tree/main/Notebooks): Guarda los cuadernos de la clase con los experimentos y resolución de casos con datos reales.
+  + [Notebooks](https://github.com/asael697/Appplied-Bayesian-Regression/tree/main/Notebooks): Guarda los cuadernos de la clase en formato `.md`  para que puedan ser visualizados de forma rápida por los alumnos.
   
-  + Scripts: Guardas las hojas de código para reproducir los experimentos realizados. 
+  + [qmd](): Guardas los cuadernos en `quarto` para poder visualizar el archivo `.html` usado en la clase, descargar el archivo, y hacer un render desde la consola u `Rstudio`.
 
 ## Contenido
 
