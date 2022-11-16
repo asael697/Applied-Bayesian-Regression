@@ -10,6 +10,10 @@ format:
     self-contained: true
     smooth-scroll: true
     anchor-sections: true
+  gfm:
+    html-math-method: webtex
+    references: 
+      location: block
 ---
 
 El modelo lineal generalizado (GLM) relaciona de forma funcional un conjunto de variables aleatorias $Z = (Y,X)$, donde la v.a. $Y \in \mathbb{R}$ se le conoce como **variable dependiente**, y a la v.a. $X \in \mathbb{R}^d$ son las **covariables**. 

@@ -11,6 +11,10 @@ format:
     self-contained: true
     smooth-scroll: true
     anchor-sections: true
+  gfm:
+    html-math-method: webtex
+    references: 
+      location: block
 ---
 
 La base de datos `mtcars` contiene el registro de motores de carros mas populares en USA, 1974. los datos contienen 32 registros, con 10 atributos del motor.
