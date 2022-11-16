@@ -308,6 +308,11 @@ que usa la variable colineal `wt` en vez de `hp`.
 
 ## Validación cruzada
 
+El siguiente código presenta una función para realizar **k-fold-CV**
+para cualquier valor de
+![k](https://latex.codecogs.com/svg.latex?k "k"). En caso de querer
+añadir otros modelos o criterios, la función deberá ser modificada.
+
 ``` r
 kfold = function(df,k){
   # Generar la particion
@@ -357,24 +362,26 @@ kfold = function(df,k){
 }
 ```
 
+**?@tbl-cv** presenta los resultados obtenidos al realizar 5-fold-cv,
+bajo todos los criterios presentados, el modelo
+![M_3](https://latex.codecogs.com/svg.latex?M_3 "M_3") presenta las
+mejores predicciones. Por lo tanto,
+![M_3](https://latex.codecogs.com/svg.latex?M_3 "M_3") es el modelo con
+Mayor aprendizaje.
+
 ``` r
 rst = kfold(df = df,k = 5)
-t(apply(rst,MARGIN = 2,FUN = "quantile",probs = c(0.025,0.5,0.975)))
-```
+x = t(apply(rst,MARGIN = 2,FUN = "quantile",probs = c(0.025,0.5,0.975)))
 
-                  2.5%         50%       97.5%
-    AIC1  129.64744966 136.5511491 138.4419206
-    AIC2  128.24468542 134.7125490 136.6309648
-    AIC3  125.97824024 130.9608223 133.5226853
-    RMSE1   2.39159580   2.9315220   3.8228189
-    RMSE2   2.33494874   2.9690151   3.7850216
-    RMSE3   2.03221634   2.8639901   3.7099161
-    MAE1    1.94909529   2.7451468   3.2311900
-    MAE2    1.82578793   2.7415632   3.2052844
-    MAE3    1.62540202   1.8581509   2.7090067
-    MAPE1   0.10467859   0.1375552   0.1698492
-    MAPE2   0.09899415   0.1331629   0.1711344
-    MAPE3   0.09219366   0.1024701   0.1288014
+# Estética
+x = data.frame(x)
+x$pars =  c("AIC1","AIC2","AIC3","RMSE1","RMSE2","RMSE3","MAE1","MAE2",
+                    "MAE3","MAPE1","MAPE2","MAPE3")
+colnames(x) = c("q2.5%","Median","q97.5%","Criterio")
+
+ft = flextable(x[c(4,1,2,3)])
+autofit(ft)
+```
 
 ## Referencias
 

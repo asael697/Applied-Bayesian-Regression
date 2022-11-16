@@ -204,7 +204,7 @@ autofit(ft)
 
 ## Validación cruzada
 
-
+El siguiente código presenta una función para realizar **k-fold-CV** para cualquier valor de $k$. En caso de querer añadir otros modelos o criterios, la función deberá ser modificada.
 
 ```{r}
 #| code-fold: true
@@ -256,10 +256,25 @@ kfold = function(df,k){
 }
 ```
 
+@tbl-cv presenta los resultados obtenidos al realizar 5-fold-cv, bajo todos los criterios presentados, el modelo $M_3$ presenta las mejores predicciones. Por lo tanto, $M_3$ es el modelo con Mayor aprendizaje.
+
 ```{r}
+#| label: tbl-cv
+#| tbl-cap: "Criterios de información de los modelos. Mediante Validación cruzada. La tabla presenta los criterios AIC, RMSE, MAE y MAPE bajo un 10-fold cv."
+
 rst = kfold(df = df,k = 5)
-t(apply(rst,MARGIN = 2,FUN = "quantile",probs = c(0.025,0.5,0.975)))
+x = t(apply(rst,MARGIN = 2,FUN = "quantile",probs = c(0.025,0.5,0.975)))
+
+# Estética
+x = data.frame(x)
+x$pars =  c("AIC1","AIC2","AIC3","RMSE1","RMSE2","RMSE3","MAE1","MAE2",
+                    "MAE3","MAPE1","MAPE2","MAPE3")
+colnames(x) = c("q2.5%","Median","q97.5%","Criterio")
+
+ft = flextable(x[c(4,1,2,3)])
+autofit(ft)
 ```
+
 
 ## Referencias
 
