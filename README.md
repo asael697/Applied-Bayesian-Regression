@@ -5,6 +5,8 @@ Este repositorio presenta el contenido y cuadernos para la clase de Modelos line
   + [Notebooks](https://github.com/asael697/Appplied-Bayesian-Regression/tree/main/Notebooks): Guarda los cuadernos de la clase en formato `.md`  para que puedan ser visualizados de forma rápida por los alumnos.
   
   + [qmd](): Guardas los cuadernos en `quarto` para poder visualizar el archivo `.html` usado en la clase, descargar el archivo, y hacer un render desde la consola u `Rstudio`.
+  
+La clase se imparte los `Lunes, Martes` y `Jueves` a las `17:00` horas (GMT -6), Para acceder al enlace zoom de la clase presione [aquí](https://aalto.zoom.us/j/63860483890).
 
 ## Contenido
 
