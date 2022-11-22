@@ -17,15 +17,16 @@ format:
       location: block
 ---
 
-El barco Titanic tiene su nombre de los titanes de la mitología Griega, y pese de ser de los cruceros mas grandes de su época, se hundió en su primera excursión ocasionando la muerte de miles de sus tripulantes. Se desea crear un modelo que prediga el número de sobrevivientes en la excursión, para eso utilizaremos los registros de muerte del evento, la base de datos se divide en dos conjuntos
+El nombre del barco "Titanic" se inspira de los titanes de la mitología Griega, y pese que fue de los cruceros más grandes de su época, se hundió en su primera excursión, ocasionando la muerte de miles de sus tripulantes. Se desea crear un modelo que prediga el número de sobrevivientes en la excursión, para eso utilizaremos los registros de muerte del evento, la base de datos se divide en dos conjuntos
 
-  + Train: que contiene 891 registros, usado para entrenar los modelos de clasificación.
+  + `Train`: que contiene 891 registros, usado para entrenar los modelos de clasificación.
   
-  + Test: contiene 418 registros, para corroborar las predicciones del modelo, pero la variable de interés no se encuentra en el conjunto de datos.
+  + `Test`: contiene 418 registros, para corroborar las predicciones del modelo, pero la variable de interés no se encuentra en el conjunto de datos.
 
 
 ```{r}
 #| message: false
+#| code-fold: true
 library(caret)
 library(GGally)
 library(ggplot2)
@@ -38,11 +39,11 @@ bayesplot_theme_set(theme_grey())
 load("Titanic.RData")
 ```
 
-Los resultados del estudio se almacenan en la base de datos `train`, que contiene las siguiente variables.
+La base de datos `Train` contiene las siguiente variables:
 
  + `survival`: Indica si la sobrevivencia del pasajero. (**Dependiente**)
 
- + `pclass`: La clase de abordaje en el tiquete. (`1 = "1st"`, `2 = '2nd"` y `3 = "3rd"`)
+ + `pclass`: La clase de abordaje en el boleto. (`1 = "1st"`, `2 = '2nd"` y `3 = "3rd"`)
 
  + `sex`: Género de los pasajeros.
  
@@ -52,9 +53,9 @@ Los resultados del estudio se almacenan en la base de datos `train`, que contien
  
  + `parh`: número de padres/hijos a bordo.
  
- + `ticket`: número de tiquete.
+ + `ticket`: número del boleto.
  
- + `fare`: precio de tiquete.
+ + `fare`: precio del boleto.
  
  + `cabin`: número de cabina.
  
@@ -66,7 +67,7 @@ Los resultados del estudio se almacenan en la base de datos `train`, que contien
 La variable `survival` es una variable indicadora que representa si el pasajero abordo sobrevivió el hundimiento del Titanic. Dado que es una v.a. discreta y dicotómica se puede modelar con una distribución de Bernoulli.
 
 $$y_i \sim Bernoulli(p), \quad y_i = 0,1. \quad \& \quad f(y) = p^y(1-p)^{(1-y)}.$$
-Donde $p$ representa la probabilidad de éxito éxito 1 representa que el paciente sobrevivió (*éxito*). 
+Donde $p$ representa la probabilidad de éxito (`éxito := 1`), que indica que el paciente sobrevivió. 
  
 Para este tipo de modelos se utilizan GLMs Logísticos, cuya estructura se presenta en la siguiente ecuación:
 
@@ -79,7 +80,7 @@ Donde:
   
   + $X$ son las covariables.
 
-Finalmente realizamos un gráfico de correlaciones para identificar las interacciones lineales entre variables.
+Finalmente, realizamos un gráfico de correlaciones para identificar las interacciones lineales entre variables.
 
 ```{r,warning=FALSE,message=FALSE,fig.width=9}
 #| label: fig-pairs
@@ -87,11 +88,11 @@ Finalmente realizamos un gráfico de correlaciones para identificar las interacc
 ggpairs(Train[,-1])
 ``` 
 
-La @fig-pairs es poco informativa debido que múltiples variables, incluidas la de interés son variables discretas,   una alternativa es usar gráficos de barras compuestos o gráfico de bombones. Para medir correlación un indicador no paramétrico equivalente, es el coeficiente de Kendall. 
+La @fig-pairs es poco informativa debido que múltiples variables, incluida la de interés, son variables discretas. Una forma alternativa de medir la dispersión en v.a.d. es usar gráficos de barras compuestos o gráfico de bombones. Para medir correlación un indicador no paramétrico equivalente, es el coeficiente de [Kendall](https://en.wikipedia.org/wiki/Kendall_rank_correlation_coefficient). 
 
 ## Ajuste del GLM Logístico
 
-Ajustamos el modelo GLM de conteo completo que consiste en usar todas las variables, y revisamos el ajuste e inferencia de los parámetros.
+Ajustamos el modelo GLM logístico completo que consiste en usar todas las variables, y revisamos el ajuste e inferencia de los parámetros.
 
 ```{r}
 m1  = glm(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare,
@@ -100,7 +101,7 @@ m1  = glm(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare,
 summary(m1)
 ```
 
-El modelo completo da una impresión con buenos resultados, todas las variables excepto el precio de boletos (`Fare`) y el numero de Padres/hijos (`parch`) pero los residuos no están centrados en cero, por ende no cumplen los supuestos iniciales. 
+El modelo completo da una impresión con buenos resultados, todas las variables excepto el precio de boletos (`Fare`) y el número de Padres/hijos (`parch`) resultaron significativas; pero los residuos no están centrados en cero, por ende no cumplen los supuestos iniciales. 
 
 El siguiente código genera una muestra Bootstrap para los parámetros del modelo $M_1$.
 
@@ -122,7 +123,7 @@ glm_boots = function(dat,B = 1000){
 }
 ```
 
-Obtenemos una muestra Bootstrap para los estimadores $\hat \beta$ de tamaño $B = 2,000$ repeticiones
+Obtenemos una muestra Bootstrap para los estimadores $\hat \beta$ de tamaño $B = 2,000$ repeticiones.
 
 ```{r}
 #| label: fig-btp1
@@ -151,9 +152,9 @@ ft = flextable(x[c(4,1,2,3)])
 autofit(ft)
 ```
 
-Los intervalos de confianza muestran que el efecto de las variables `Fare` y `Parxh` esta concentrado en cero, por lo tanto, se deberá considerar un GLM de Poisson excluyendo dicha variable.
+La @fig-btp1 muestra la distribución muestral de los estimadores del modelo, y la @tbl-btp1 muestra los intervalos de confianza.El efecto de las variables `Fare` y `Parxh` está concentrado en cero, por lo tanto, se deberá considerar un GLM logístico reducido.
 
-Los residuos no son una medida correcta para evaluar el ajuste del modelo. Esto se debe a que el modelo predice de forma continua valores en el intervalo unitario $I = [0,1]$ y los datos son enteros en la clausura de $I$. Una forma mas adecuada de visualizar los residuos es usando la matriz de confusión, esta es una matriz en $\mathbb{R}^{2 \times 2}$ que presenta el ajuste del modelo.
+Los residuos no son una medida correcta para evaluar el ajuste del modelo. Esto se debe a que el modelo predice de forma continua valores en el intervalo unitario $I = [0,1]$ y los datos son los enteros en la clausura de $I$. Una forma adecuada de visualizar los residuos es usando la matriz de confusión, esta es una matriz en $\mathbb{R}^{2 \times 2}$ que presenta el ajuste del modelo.
 
 $$
  CM = \begin{pmatrix}
@@ -188,11 +189,11 @@ Accuracy = sum(diag(x))
 Accuracy
 ```
 
-## Selección de modelos, LOO-CV
+## Selección de modelos, 10-fold-CV
 
 Para seleccionar el mejor modelo usaremos validación cruzada, 10-fold, esto implica que ajustaremos diez veces cada modelo, evaluando la precisión del modelo. Los modelos que se consideraran son los siguientes:
 
- + $M_1:$ Modelo de logístico Completo completo
+ + $M_1:$ Modelo de logístico completo
  
  + $M_2:$ Modelo logístico reducido sin la variable `Parch`.
  
@@ -243,17 +244,16 @@ kfold = function(df,k){
 }
 ```
 
-@tbl-cv presenta los resultados obtenidos al realizar 10-fold-cv, el modelo $M_3$ es el que presenta la mejor presicion de los tres modelos evaluados.
+@tbl-cv presenta los resultados obtenidos al realizar 10-fold-cv, el modelo $M_3$ es el que presenta la mejor precisión de los tres modelos evaluados.
 
 ```{r}
 #| label: tbl-cv
-#| tbl-cap: "Criterios de información de los modelos. Mediante Validación cruzada. La tabla presenta los criterios AIC, RMSE,  y MAE bajo un 5-fold cv."
+#| tbl-cap: "Precisión de los modelos. Mediante Validación cruzada."
 rst = kfold(df = na.exclude(Train),k = 10)
 x = t(apply(rst,MARGIN = 2,FUN = "quantile",probs = c(0.025,0.5,0.975)))
 
 # Estética
 x = data.frame(x)
-x
 x$pars =  c("Accuracy1", "Accuracy2", "Accuracy3")
 colnames(x) = c("q2.5%","Median","q97.5%","Criterio")
 
@@ -261,11 +261,11 @@ ft = flextable(x[c(4,1,2,3)])
 autofit(ft)
 ```
 
-@tbl-cv compara los tres modelos, usando la medida de precisión, y el modelo reducido $M_3$ tiene resultados ligeramente mejores. Finalmente procedemos a predecir en el conjunto de prueba, @fig-pred presenta las predicciones realizadas por nuestro modelo para 332 pasajeros, donde la mayoría de ellos no sobreviven al hundimiento del barco.
+@tbl-cv compara los tres modelos, usando la medida de precisión, y el modelo reducido $M_3$ tiene resultados ligeramente mejores. Finalmente,  se predice en el conjunto de prueba, la @fig-pred presenta las predicciones realizadas por el modelo $M_3$ para 332 pasajeros, donde la mayoría de ellos no sobreviven al hundimiento del barco.
 
 ```{r}
 #| label: fig-pred
-#| fig-cap: "Gráfico de dpredicciones. La barra roja presenta el número de pasajeros que no sobrevivieron al hundimiento del Titanic."
+#| fig-cap: "Gráfico de predicciones. La barra roja presenta el número de pasajeros que no sobrevivieron al hundimiento del Titanic."
 m3 = glm(Survived ~ Pclass + Sex + Age + SibSp,
               data = Train,family = binomial)
 
@@ -280,12 +280,11 @@ ggplot(p3, aes(x=as.factor(p3), fill=as.factor(p3) )) +
        x = "Sobrevivencia",y = "Conteo")+theme(legend.position="none")
 ```
 
-
 ## Referencias
 
 ---
 nocite: |
- @Casella @degroot2012 @Miggon2014 @gelman2013 @BMLR2021 
+ @Casella @degroot2012 @Miggon2014 @gelman2013 @BMLR2021 @BMCP2021
 ---
 
 ::: {#refs}
