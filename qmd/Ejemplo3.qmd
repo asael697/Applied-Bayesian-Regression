@@ -1,0 +1,292 @@
+---
+title: "Sobrevivencia en el Titanic"
+subtitle: "GLMs Logísticos"
+author: "Asael Alonzo Matamoros"
+date: "`r Sys.Date()`"
+bibliography: ref.bib
+format: 
+  html:
+    toc: true
+    code-copy: true
+    self-contained: true
+    smooth-scroll: true
+    anchor-sections: true
+  gfm:
+    html-math-method: webtex
+    references: 
+      location: block
+---
+
+El barco Titanic tiene su nombre de los titanes de la mitología Griega, y pese de ser de los cruceros mas grandes de su época, se hundió en su primera excursión ocasionando la muerte de miles de sus tripulantes. Se desea crear un modelo que prediga el número de sobrevivientes en la excursión, para eso utilizaremos los registros de muerte del evento, la base de datos se divide en dos conjuntos
+
+  + Train: que contiene 891 registros, usado para entrenar los modelos de clasificación.
+  
+  + Test: contiene 418 registros, para corroborar las predicciones del modelo, pero la variable de interés no se encuentra en el conjunto de datos.
+
+
+```{r}
+#| message: false
+library(caret)
+library(GGally)
+library(ggplot2)
+library(flextable)
+library(bayesplot)
+library(ggfortify)
+
+bayesplot_theme_set(theme_grey())
+
+load("Titanic.RData")
+```
+
+Los resultados del estudio se almacenan en la base de datos `train`, que contiene las siguiente variables.
+
+ + `survival`: Indica si la sobrevivencia del pasajero. (**Dependiente**)
+
+ + `pclass`: La clase de abordaje en el tiquete. (`1 = "1st"`, `2 = '2nd"` y `3 = "3rd"`)
+
+ + `sex`: Género de los pasajeros.
+ 
+ + `Age`: Edad en años.
+ 
+ + `sibsp`: número de parientes/esposas a bordo.
+ 
+ + `parh`: número de padres/hijos a bordo.
+ 
+ + `ticket`: número de tiquete.
+ 
+ + `fare`: precio de tiquete.
+ 
+ + `cabin`: número de cabina.
+ 
+ + `embarked`: Puerto de embarcación. `C = Chersbourg`, `Q = Queenstown`, y `S = Southampton`.
+ 
+
+## Verosimilitud
+ 
+La variable `survival` es una variable indicadora que representa si el pasajero abordo sobrevivió el hundimiento del Titanic. Dado que es una v.a. discreta y dicotómica se puede modelar con una distribución de Bernoulli.
+
+$$y_i \sim Bernoulli(p), \quad y_i = 0,1. \quad \& \quad f(y) = p^y(1-p)^{(1-y)}.$$
+Donde $p$ representa la probabilidad de éxito éxito 1 representa que el paciente sobrevivió (*éxito*). 
+ 
+Para este tipo de modelos se utilizan GLMs Logísticos, cuya estructura se presenta en la siguiente ecuación:
+
+$$y_i \sim \text{Bernoulli}(p_i),\quad g(p) = \text{logit}(p_i), \text{ y } p_i = \frac{1}{1 + e^{-\beta X_i}}.$$
+Donde:
+
+  + $g:\mathbb R \to \mathbb R$, es la función logit $g(x) = \log\left(\frac{p}{1-p}\right)$.
+  
+  +  $g^{-1}(x) = \frac{1}{1 + e^{-x}}$ es la función logística.
+  
+  + $X$ son las covariables.
+
+Finalmente realizamos un gráfico de correlaciones para identificar las interacciones lineales entre variables.
+
+```{r,warning=FALSE,message=FALSE,fig.width=9}
+#| label: fig-pairs
+#| fig-cap: "Gráfico de pares. La diagonal principal muestra histogramas densidades de cada una de las variables. La parte superior muestra el coeficiente de correlación entre dos variables, fila y columna. La parte inferior muestra un gráfico de dispersión entre dos variables."
+ggpairs(Train[,-1])
+``` 
+
+La @fig-pairs es poco informativa debido que múltiples variables, incluidas la de interés son variables discretas,   una alternativa es usar gráficos de barras compuestos o gráfico de bombones. Para medir correlación un indicador no paramétrico equivalente, es el coeficiente de Kendall. 
+
+## Ajuste del GLM Logístico
+
+Ajustamos el modelo GLM de conteo completo que consiste en usar todas las variables, y revisamos el ajuste e inferencia de los parámetros.
+
+```{r}
+m1  = glm(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare,
+            data = Train, family = "binomial")
+
+summary(m1)
+```
+
+El modelo completo da una impresión con buenos resultados, todas las variables excepto el precio de boletos (`Fare`) y el numero de Padres/hijos (`parch`) pero los residuos no están centrados en cero, por ende no cumplen los supuestos iniciales. 
+
+El siguiente código genera una muestra Bootstrap para los parámetros del modelo $M_1$.
+
+```{r}
+#| code-fold: true
+glm_boots = function(dat,B = 1000){
+  n = dim(dat)[1]
+  est = NULL
+  for (i in 1:B) {
+    si = sample(x = 1:n,size = n,replace = TRUE)
+    dsi = dat[si,]
+    mli = glm(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare,
+              data = dsi,family = binomial)
+    ci = as.array(mli$coefficients)
+    est = rbind(est,ci)
+  }
+  # Estética
+  return(est)
+}
+```
+
+Obtenemos una muestra Bootstrap para los estimadores $\hat \beta$ de tamaño $B = 2,000$ repeticiones
+
+```{r}
+#| label: fig-btp1
+#| fig-cap: "Gráfico de densidades. Cada densidad representa la distribución muestral aproximada para cada uno de los estimadores usando un Bootstrap de B = 2,000 iteraciones."
+
+btp = glm_boots(dat = Train,B = 2000)
+
+color_scheme_set("green")
+mcmc_dens(btp)+labs(title="Distribución muestral de los estimadores, GLM Logístico",
+                    subtitle ="Bootstrap B = 2,000 iteraciones")
+```
+
+Los intervalos de confianza al 95% son:
+
+```{r}
+#| label: tbl-btp1
+#| tbl-cap: "Intervalos de confianza al 95%, obtenidos a partir de una muestra bootstrap de B = 2,000 iteraciones"
+x = apply(btp,MARGIN = 2, FUN = quantile, probs = c(0.025,0.5,0.975)) 
+
+# Estética
+x = data.frame( t(x) )
+x$pars = c("intercepto","Pclass","Sexmal","Age","SibSp","Parch","Fare")
+colnames(x) = c("q2.5%","Median","q97.5%","parámetros")
+
+ft = flextable(x[c(4,1,2,3)])
+autofit(ft)
+```
+
+Los intervalos de confianza muestran que el efecto de las variables `Fare` y `Parxh` esta concentrado en cero, por lo tanto, se deberá considerar un GLM de Poisson excluyendo dicha variable.
+
+Los residuos no son una medida correcta para evaluar el ajuste del modelo. Esto se debe a que el modelo predice de forma continua valores en el intervalo unitario $I = [0,1]$ y los datos son enteros en la clausura de $I$. Una forma mas adecuada de visualizar los residuos es usando la matriz de confusión, esta es una matriz en $\mathbb{R}^{2 \times 2}$ que presenta el ajuste del modelo.
+
+$$
+ CM = \begin{pmatrix}
+    P & FP\\
+    FN & N
+ \end{pmatrix}
+$$
+Donde: 
+ 
+  + $P$ representa los valores predichos correctamente como positivos (1).
+  
+  + $N$ representa los valores predichos correctamente como negativos (0).
+  
+  + $FP$ representan los valores falsos positivos, $\hat y = 1$ cuando $y = 0$.
+  
+  + $FN$ representan los valores falsos negativos, $\hat y = 0$ cuando $y = 1$.
+
+```{r}
+pred1 = predict(m1,Train[,-c(1:2)],type = "response")
+pred1 =  ifelse(pred1 > 0.5, 1, 0)
+   
+x = table(pred1, Train$Survived)
+x = round(prop.table(x)*100,2)
+x
+```
+  
+Una medida importante es la precisión (*"Accuracy"*) del modelo, que es el porcentaje de aciertos del modelo. Que se calcula como la suma de las diagonales en la matriz de confusión.
+El accuracy para el modelo $M_1$ es:
+
+```{r}
+Accuracy = sum(diag(x))
+Accuracy
+```
+
+## Selección de modelos, LOO-CV
+
+Para seleccionar el mejor modelo usaremos validación cruzada, 10-fold, esto implica que ajustaremos diez veces cada modelo, evaluando la precisión del modelo. Los modelos que se consideraran son los siguientes:
+
+ + $M_1:$ Modelo de logístico Completo completo
+ 
+ + $M_2:$ Modelo logístico reducido sin la variable `Parch`.
+ 
+ + $M_3:$ Modelo logístico reducido sin variables `Parch` y `Fare`.
+
+El siguiente código presenta una función para realizar **k-fold-CV** para cualquier valor de $k$. En caso de querer añadir otros modelos o criterios, la función deberá ser modificada.
+
+```{r}
+#| code-fold: true
+kfold = function(df,k){
+  # Generar la particion
+  kfld = createFolds(df[,1],k = k)
+  mat = NULL
+  
+  for (i in 1:k) {
+    # separar los datos en conjuntos de prueba y entrenamiento
+    dfE= df[-kfld[[i]],]
+    dfP = df[kfld[[i]],]
+    # Ajustar los modelos
+    m1  = glm(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare,
+              data = dfE,family = binomial)
+    m2 = glm(Survived ~ Pclass + Sex + Age + SibSp + Fare,
+              data = dfE,family = binomial)
+    m3  = glm(Survived ~ Pclass + Sex + Age + SibSp,
+              data = dfE,family = binomial)
+
+    
+    p1  = predict(m1,dfP,type = "response")
+    p1 =  ifelse(p1 > 0.5, 1, 0)
+    p2 = predict(m2,dfP,type = "response")
+    p2 =  ifelse(p2 > 0.5, 1, 0)
+    p3  = predict(m3,dfP,type = "response")
+    p3 =  ifelse(p3 > 0.5, 1, 0)
+
+    Accuracy = c(
+      sum(diag(round(prop.table(table(p1, dfP[,2]))*100,2))),
+      sum(diag(round(prop.table(table(p2, dfP[,2]))*100,2))),
+      sum(diag(round(prop.table(table(p3, dfP[,2]))*100,2)))
+    )
+
+
+    # Unir los datos
+    mat = rbind(mat,Accuracy) 
+  }
+  colnames(mat) = c("Accuracy1","Accuracy2","Accuracy3")
+  row.names(mat) = NULL
+  return(mat)
+}
+```
+
+@tbl-cv presenta los resultados obtenidos al realizar 10-fold-cv, el modelo $M_3$ es el que presenta la mejor presicion de los tres modelos evaluados.
+
+```{r}
+#| label: tbl-cv
+#| tbl-cap: "Criterios de información de los modelos. Mediante Validación cruzada. La tabla presenta los criterios AIC, RMSE,  y MAE bajo un 5-fold cv."
+rst = kfold(df = na.exclude(Train),k = 10)
+x = t(apply(rst,MARGIN = 2,FUN = "quantile",probs = c(0.025,0.5,0.975)))
+
+# Estética
+x = data.frame(x)
+x
+x$pars =  c("Accuracy1", "Accuracy2", "Accuracy3")
+colnames(x) = c("q2.5%","Median","q97.5%","Criterio")
+
+ft = flextable(x[c(4,1,2,3)])
+autofit(ft)
+```
+
+@tbl-cv compara los tres modelos, usando la medida de precisión, y el modelo reducido $M_3$ tiene resultados ligeramente mejores. Finalmente procedemos a predecir en el conjunto de prueba, @fig-pred presenta las predicciones realizadas por nuestro modelo para 332 pasajeros, donde la mayoría de ellos no sobreviven al hundimiento del barco.
+
+```{r}
+#| label: fig-pred
+#| fig-cap: "Gráfico de dpredicciones. La barra roja presenta el número de pasajeros que no sobrevivieron al hundimiento del Titanic."
+m3 = glm(Survived ~ Pclass + Sex + Age + SibSp,
+              data = Train,family = binomial)
+
+p3  = predict(m3,Test,type = "response")
+p3 =  ifelse(na.exclude(p3) > 0.5, 1, 0)
+p3 = data.frame(p3)
+
+ggplot(p3, aes(x=as.factor(p3), fill=as.factor(p3) )) + 
+  geom_bar( ) + scale_fill_hue(c = 40) +
+  labs(title = "Predicciones de la sobrevivencia de los pasajeros, Titanic",
+       subtitle = "Conjunto de Prueba",
+       x = "Sobrevivencia",y = "Conteo")+theme(legend.position="none")
+```
+
+
+## Referencias
+
+---
+nocite: |
+ @Casella @degroot2012 @Miggon2014 @gelman2013 @BMLR2021 
+---
+
+::: {#refs}
+:::
