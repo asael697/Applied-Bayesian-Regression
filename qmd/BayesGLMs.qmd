@@ -1,0 +1,350 @@
+---
+title: "Una introducción al Bayesian Workflow"
+author: "Asael Alonzo Matamoros."
+date: "`r Sys.Date()`"
+bibliography: ref.bib
+format: 
+  html:
+    toc: true
+    code-copy: true
+    self-contained: true
+    smooth-scroll: true
+    anchor-sections: true
+  gfm:
+    html-math-method: webtex
+    references: 
+      location: block
+---
+
+Los métodos Bayesianos modernos se desarrollan mayoritariamente mediante ordendores. En la actualidad, múltiples algoritmos permiten aproximar las densidades a posterior en tiempo real, disminuyendo la brecha de complejidad que existía en el desarrollo y evaluación de modelos probabilistas. 
+
+Las características mas importantes de usar métodos Bayesianos en la práctica son:
+
+  1. Las cantidades desconocidas se describen usando funciones de densidad (*parámetros*).
+  
+  2. El *teorema de Bayes* es utilizado para actualizar los parámetros desconocidos.
+  
+  3. Permite incorporar información adicional en el proceso de estimación de los parámetros mediante una densidad (*priori*). 
+  
+Es importante resaltar que este Bayesian Workflow @gelman2020bayesian, es análogo al [workflow Básico](https://asael697.github.io/ABM/posts/GLMs/) presentado para análisis de modelos frecuentistas. Previo a nuestra introducción de la metodología a utilizar, es necesario establecer nuestros supuestos y objetos de estudio.
+
+## La historia de siempre
+
+Sea $Y = \{Y_1,Y_2,\ldots,Y_n\}$ una colección de variables aleatorias^[Estamos abusando de la notación, en este caso el objeto Y es una función aleatoria de dimensión d arbitraria; si d > 1 entonces Y es un vector aleatorio.] intercambiables^[Decimos que Y1 y Y2 son intercambiables si f(Y1,Y2) = f(Y2,Y1).]. Sea $y = (y_1,y_2,\ldots,y_n)$ el vector de datos observados ($Y = y$), cuya función de densidad  es $f(y_i|\theta_i)$, y $\theta_i$ son desconocidos.
+
+En este enfoque, $\theta_i \in \mathbb{R}^k$ es un vector de parámetros considerada aleatorio, su espacio muestral es $(\Theta,\mathcal F, P)$, y su función de densidad inicial es $f(\theta)$.
+ 
+
+La función $f(\theta)$ resume todos los supuestos iniciales de los parámetros desconocidos, resumiendo la `incertidumbre` (*mide que tan incierto es el valor del parámetro para dichos datos*). El objetivo es actualizar la `incertidumbre` mediante la nueva información obtenida (*datos*) del fenómeno en estudio, y por el *teorema de Bayes*, esta se actualiza mediante la siguiente formula:
+
+$$f(\theta_i|y) = \frac{f(y|\theta_i)f(\theta_i)}{\int f(y|\theta_i)f(\theta_i)d \theta_i} \quad j = 1,2,\ldots,k.$$
+
+Donde:
+
+ + Bajo el supuesto de intercambiabilidad, $f(y|\theta_i) = \prod_{j=1}^n f(y_j|\theta_i)$.
+ 
+ + $f(\theta_i|y)$ es la posteriori de los parámetros (`incertidumbre` "mejorada").
+ 
+:::{.callout-note} 
+
+## Notar que: 
+  
+  + La denisdad $f(\theta_i|y) = f(\theta_i|Y=y)$ esta condicionada a una cantidad fija ($Y=y$), por lo tanto, la posterior no es aleatoria ni abstracta.
+  
+  + $f(y) = \int f(y|\theta_i)f(\theta_i)d \theta_i$ es la densidad marginal *observada* para $Y$.
+ 
+ + $f(y)$ es fija, conocida, y no depende de $\theta_i$, por lo tanto, se modela como una constante $k$.
+ 
+::: 
+ 
+ La ecuación anterior es muy complicada de manejar y usualmente se resume como:
+ 
+ $$f(\theta_i|y) \propto f(y|\theta_i)f(\theta_i).$$
+Donde $\propto$ representa la constante de proporcionalidad.
+
+### Densidad Predictiva 
+
+Una cantidad muy importante es la función predictiva a posteriori del modelo^[Posterior predictive density]. Sea $y^*$ una observación nueva e independiente de  la muestra $y$, cuya función de densidad real es $f_t(y^*)$. Esta *"nueva observación"* es desconocida para los datos y se considera aleatoria, el cual se puede cuantificar mediante la siguiente ecuación:
+
+$$f(Y^*|y) = \int f(Y^*|\theta_i)f(\theta_i|y) d\theta_i,$$
+donde: 
+
+ + $f(Y^*|y)$ es la función predictiva a posteriori.
+ 
+ + $Y^*$ es la variable aleatoria que cuantifica a $y^*$.
+ 
+ + $f(\cdot|\theta_i):\mathbb R \to \mathbb R^+$ para un $\theta_i$ fijo, es una función medible de $Y^*$.
+ 
+ + $f(Y^*|\theta_i)$ es una transformación de $Y^*$; por lo tanto, es una cantidad aleatoria nueva.
+
+Esta densidad se puede interpretar como el valor esperado a posteriori de la función generadora de datos,
+
+$$f(Y^*|y) = E_{\theta|y}\left[f(Y^*|\theta_i)\right].$$
+
+La función predictiva es de vital importancia para realizar diagnóstico de las estimaciones obtenidas y para medir el ajuste de un modelo. El `ajuste` de un modelo se mide al comparar $f(Y^*|\theta_i)$ con su valor real $f_t(y)$. En la práctica esta comparación tiene dos limitantes:
+
+  1. Cómo comparar funciones de densidad? 
+  
+  2. $f_t(y)$ siempre es desconocida.
+
+Estas limitantes se pueden sobrellevar, y de esos detalles hablaremos en las próximas secciones, por ahora, enfocarnos en la función a priori.
+ 
+## Tipos de Priors
+
+Según sea la función a priori definida, así serán las características de la función a posteriori. Por ejemplo, en un problema de optimización, estas densidades regularizan la verosimilitud de la muestra. 
+
+Una correcta definición de la prior es importante para un análisis de datos objetivo e imparcial. 
+
+En la actualidad existen diferentes elecciones para la prior, las mas comunes son:
+
+ + Priors dispersas,
+ 
+ + Priors Objetivas,
+ 
+ + Maximum entropy Priors,
+ 
+ + Prios débiles.
+
+#### Prioris dispersas
+
+Este tipo de priors se caracterizan por ser distribuciones uniformes definidas en un subconjunto del espacio muestral $\Theta$ *"muy grande"*; @gelman2013. 
+
+$$
+ f(\theta) \propto U(a-\varepsilon,a+\varepsilon), \ \varepsilon \to \infty.
+$$
+ 
+**Características**:
+
+ - No proveen información externa. 
+ 
+ - Son muy subjetivas.
+    
+ - No exploran objetivamente el espacio muestral $\Theta$.
+ 
+#### Prioris objetivas 
+
+Este tipo de priors se conocen como *"no informativas"*, y se caracterizan por tratar de penalizar la verosimilitud mediante el criterio de información de Fisher; @Miggon2014.
+
+$$
+ f(\theta) \propto |I(\theta)|^{1/2}.
+$$
+**Características**:
+
+ - Son funciones de densidad impropias (No integran 1).
+ 
+ - Proveen información pese se llamadas no informativas.
+ 
+ - Son invariantes a transformaciones de $\theta$.
+ 
+####  Maximum entropy Priors
+
+Este tipo de priors se conocen como *"priors de referencia"*, y el objetivo es elegir la prior que sea lo mas similar posible a un posterior de referencia elegida; @Bernardo+Smith:1994.
+
+$$
+ f(\theta) \propto \arg \max_{f(\theta)} H(\theta | y),
+$$ 
+donde,
+
+$$
+ H(\theta | y) =-\int f(\theta|y)\log f(\theta|y)d\theta.
+$$
+
+**Características**:
+
+ - Son muy complicadas de computar.
+ 
+ - Maximizan la selección de la posterior.
+ 
+ - Son muy informativas, pese a ser de la misma clase que las prioris objetivas.
+  
+#### Prioris conjugadas
+
+Estas priors generan posteriors con forma analítica y que pertenecen a la familia exponencial, las primeras aplicaciones surgieron a partir de este tipo de distribuciones; @degroot2012.
+
+$$
+ f(\theta), \ f(y | \theta) \in \mathcal F_\varepsilon, \to f(\theta|y) \in \mathcal F_\varepsilon. 
+$$
+  
+**Características**:
+
+ - La posterior tiene solución analítica.
+ 
+ - Limitan la cantidad de modelos a utilizar.
+ 
+ - Garantizan un análisis objetivo de los datos, pero pueden ser muy informativas.
+
+#### Prioris débiles: 
+
+No existe una regla, formula o método para seleccionar este tipo de priors, pero se basan en elegir distribuciones que no brinden mucha información y tengan propiedades que enriquecen el análisis de modelo o la estimación del mismo; @BMCP2021.
+  
+**Características**:
+
+ - proveen poca información sobre $\theta$.
+ 
+ - regularizan la posterior.
+ 
+ - No tienen forma especifica, ni método de selección. 
+
+Existen múltiples estudios para cada tipo de prior estudiando los beneficios de las posteriors en un modelo en especifico, por ejemplo ver @fonseca2019. En la actualidad, existe una rama de inferencia denotada prior elicitation (@Mikola-et-al:2021) que definen algoritmos para seleccionar la mejor prior en una familia de funciones.
+     
+## Estimación de la posterior
+
+En la actualidad existen muchos métodos para estimación de la posterior:
+
+ + **Monte Carlo Markov Chain (MCMC)**: Gibbs Sampler, @metropolis1953 y Metropolis-Hastings, @Hasting1970.
+ 
+ + **MCMC basados en gradientes**.  Hamiltonean Monte Carlo (HMC) y Metropolis Adaptative Lavengian algorithm (MALA), ver @Duane1987, @hoffman14, y @betancourt2017.
+ 
+ + **Penalized Maximum Likelihood (P-MLE)**: encontrar $MAEP(\theta) = \arg \max f(\theta | y)$, el MAPE se aproxima con métodos de Quasi-Newton, en particular L-BFGS.
+ 
+ + **Approximated Bayesian Computation (ABC):** Rejection Sampler.
+ 
+ + **Variational Inference (VI)**: Stochastic gradient Descent.
+
+En la mayoría de los métodos de aproximación se obtiene una muestra  $\Theta_P = \{\theta_1,\theta_2,\ldots,\theta_S\}$ de la posterior, que se puede utilizar para aproximar los *estimadores puntuales* e *intervalos de credibilidad*.
+
+### Estimadores puntuales
+
+Un estimador puntual es el valor que minimiza una función de perdida de la posteriori, el estimador mas común es la Media a posteriori:
+
+$$
+ \hat \theta_1 = E[\theta | y] \approx \frac{1}{m}\sum_i^m \theta_k.
+$$
+ 
+Otro estimador muy utilizado es la mediana a posteriori, es bastante popular en posteriors con colas pesadas.
+
+$$
+ \hat \theta_2 = \text{median}(\theta | y) \approx \hat q(\Theta_P)_{0.5}.
+$$
+  
+El máximo a posterioir (MAP) es la moda de la posterior y solo se obtiene con los métodos penalized MLE y VI. 
+
+$$
+ \hat \theta_3 = \max f(\theta | y).
+$$
+
+### Incertidumbre de los estimadores
+
+La posterior del parámetro es una medida de incertidumbre en si misma, ventaja principal por la cual se prefiere *inferencia Bayesiana* sobre la *frecuentista*.
+
+La forma estándar de resumir la incertidumbre es mediante los *intervalos de credibilidad*, estos se pueden aproximar mediante los quantiles muestrales $q_\alpha$ de $\Theta_P$^[Si las posteriors son *uni-modales*, entonces los Intervalos de credibilidad son `High posterior density`.]. 
+
+$$IC_{(1-\alpha)*100\%} = [\hat q(\Theta_P)_{\alpha/2}, \hat q(\Theta_P)_{1-\alpha/2}]$$
+
+## Posterior Predictive checks
+ 
+Estos métodos son análogos al análisis de los residuos en inferencia clásica. La idea es comparar la función predictiva  $f(y^*|y)$ con los datos obtenidos $y$. En la mayoría de los casos, $f(y^*|y))$ se aproxima con `Monte-Carlo`.
+
+$$\hat f(y^*|y)  = E_{\theta|y} [f(y^*|\theta)] \approx \frac{1}{m}\sum_{k=1}^m f(y^*|\theta_k)$$
+
+Por lo tanto, se puede obtener una muestra de la predictiva para cada uno de los $y_i$ observado de la forma:
+
+$$\hat y^{(j)}_i \sim \frac{1}{m}\sum_{k=1}^m f(y^*|\theta_k), \quad f(\cdot|\theta) \text{ conocida}.$$
+
+Donde $y^{(1)}_i, y^{(2)}_i, \ldots, y^{(m)}_i$ es una muestra para $f(y_i^*|y)$.
+
+Finalmente, los errores del modelo se estiman: 
+
+$$\hat \varepsilon^{(j)}_i \approx y_i - y^{(k)}_i.$$
+
+### log-Verosimilitud
+
+Un estimador muy importante para la selección de modelos es la matriz de log-verosimilitudes, esta se estima por métodos de `Monte-Carlo` usando una muestra de la posterior $\Theta_P$, de la siguiente forma:
+
+$$\log f(y|\theta) = [\log f(y_i|\theta_j)] \in \mathbb R^{S \times n},$$
+Donde $i = 1,2,\ldots,n$ y $j = 1,2,\ldots,S$, para el tamaño de muestra $n$ y número de simulaciones de la posterior $S$. A partir de las matrices de log-verosimilitudes se puede estimar una muestra a posterior de la log-likelihood del modelo a partir de la siguiente ecuación:
+
+$$\text{log-lik}(M)_j = -\sum_{i=1}^n \log f(y_i | \theta_j).$$
+La muestra obtenida, estima la distribución a posteriori del modelo $\text{log-lik}(M)$. Estos valores pueden utilizarse para comparación preliminar de modelos, y se elige el modelo con criterio menor.
+
+## Selección de modelos
+
+Seleccionar el modelo adecuado de los datos de un conjunto de modelos $M_1,M_2, \ldots, M_k$ es un problema muy complicado, debido a los altos costos computacionales y complejidad de los algoritmos. En la actualidad los métodos más utilizados son:
+
+ + Factor de Bayes
+ 
+ + Watanabe-Akaike Information Criteria (WAIC).
+ 
+ + Expected log predictive density (elpd).
+
+#### Factores de Bayes
+
+Los factores de Bayes, fueron propuestos por Jeffrey ([1960]()) y re-interpretados por @Kass1995 para selección de modelos. Los factores de Bayes se basan en comparar las posteriors de los modelos definidos sobre los datos:
+
+$$f(M_i |y) \propto f(y | M_i)f(M_i),$$
+Donde $f(y | M_i) = f_{M_i}(y)$ es la verosimilitud marginal de los datos, y $f(M_i)$ es la distribución a priori del modelo, o su importancia. Por lo tanto, el factor de Bayes es:
+
+$$
+ FB = \frac{f(M_i|y)}{f(M_j |y)} \propto \frac{f_{M_i}(y)f(M_i)}{f_{M_j}(y)f(M_j)},
+$$
+
+En la práctica no tenemos importancia o favoritismo hacia un modelo entonces elegimos las priors iguales $f(M_i) = f(M_j)$. Por lo tanto, el factor de Bayes es equivalente a la razón de verosimilitudes marginales.
+
+$$FB = \frac{f_{M_i}(y)}{f_{M_j}(y)}.$$
+
+La verosimilitud marginal de los datos se puede aproximar con un método de `Monte-Carlo` de la siguiente forma:
+
+$$
+ f(y) = \int f(y|\theta)f(\theta)d \theta \approx \sum_{k=1}^mf(y|\theta_k), \quad \theta_k \sim f(\theta).
+$$
+
+Observaciones: 
+
+  - El Factor de Bayes es sensible a modelos con priors no informativas.
+    
+  - Muy complicado de estimar, y los algoritmos son inestables.
+    
+  - Es perfecto para encontrar el modelo real.
+    
+Aproximar las verosimilitudes marginales con `Monte Carlo` es muy ineficiente e inestable numéricamente, otros algoritmos utilizados es `muestreo por importancia` y el algoritmo de `Bridge-Sampling`; @gronau2017.
+
+#### Expected log predictive density
+
+La elpd es una divergencia entre el modelo ajustado y la densidad real de los datos que se calcula mediante la siguiente ecuación:
+
+$$\text{elpd}(M_k|y) = - \int\log f(y^*|y) f_t(y)dy,$$
+Esta medida se puede aproximar usando un método de `Monte-Carlo` mediante la siguiente ecuación:
+
+$$elpd(M_k|y) \approx - \sum_{i=1}^m\log f(y_i^*|y_i).$$
+
+El mayor problema problema es que $\log f(y_i^*|y_i)$ es desconocida y se calcula a partir de la predictiva:
+
+$$f(y_i^*|y_i) = \int f(y_i^*|\theta)f(\theta|y) d\theta.$$
+
+@vehtari2016 proponen hacer la estimación de la predictiva utilizando validación cruzada, cuando la forma de la predictiva es proporcional a la verosimilitud:
+
+$$f(y_i|y_{-i}) \approx \frac{1}{\frac{1}{S}\sum_{s=1}^S[f(y_i|\theta_s)]^{-1}},$$
+
+donde $\theta_1,\theta_2,\ldots,\theta_S$ es una muestra de la posterior $\Theta_P$; $y_{-i}$ representa el vector original de los datos quitando la observación $y_i$, y $f(y_i|y_{-i})$ es la predictiva para $y_i$ cuando asumimos que esta es desconocida. Por lo tanto, la elpd se aproxima con
+
+$$elpd(M_k|y) \approx - \sum_{i=1}^n\log \left[ \frac{1}{\frac{1}{S}\sum_{s=1}^S[f(y_i|\theta_s)]^{-1}} \right]$$
+
+El mayor problema de esta aproximación es que es muy inestable numéricamente, mucho mayor que las obtenidas en el factor de Bayes, y @vehtari2016 propone resolver esta aproximación con muestreo por importancia usando una distribución generalizada de Pareto. 
+
+Observaciones: 
+
+  - Elige al modelo que más se acerque a la función real de los datos ($f_t$ *desconocida*).
+    
+  - Su estimación es con remuestreo LOO-CV y es sensible a perturbaciones o malos ajustes.
+    
+  - Elige al modelo que predice mejor.
+
+#### Watanabe-Akaike Information Criteria
+
+El WAIC es un criterio de información mayormente conocido como Widely Applicable information criteria, que penalización dela log-predictiva del modelo es mediante su segundo momento.
+ 
+$$WAIC = -E[\log f(y^*|y)] -n V[\log f(y^*|y)]$$
+El criterio de información de Watanabe es asintótico al valor obtenido por la $elpd$, por lo tanto, puede ser aproximado con validación cruzada.
+
+Observaciones: 
+  
+  - se elige el modelo con menor criterio de información.
+    
+  - Se puede estimar con métodos de `Monte-Carlo`.
+    
+  - Problemático para modelos muy similares
+    
+## Referencias
+
+::: {#refs}
+:::
