@@ -1,0 +1,250 @@
+---
+title: "Capacidad de carros por consumo, parte 2"
+subtitle: "GLM Gaussianos revisitados"
+author: "Asael Alonzo Matamoros"
+date: "`r Sys.Date()`"
+bibliography: ref.bib
+format: 
+  html:
+    toc: true
+    code-copy: true
+    self-contained: true
+    smooth-scroll: true
+    anchor-sections: true
+  gfm:
+    html-math-method: webtex
+    references: 
+      location: block
+---
+
+La base de datos `mtcars` contiene el registro de motores de carros mas populares en USA, 1974. los datos contienen 32 registros, con 10 atributos del motor.
+
+```{r}
+#| message: false
+library(GGally)
+library(ggplot2)
+library(rstanarm)
+library(flextable)
+library(bayesplot)
+
+options(mc.cores = parallel::detectCores())
+```
+
+Se desea predecir la capacidad de consumo de los motores, para eso se evaluaron las siguiente variables.
+
+ + `mpg`: Millas por Galón. (**Dependiente**)
+
+ + `hp`: Caballos de fuerza.
+
+ + `carb`: número de carburadores.
+ 
+ + `wt`: peso del motor.
+ 
+ + `gears`: Número de cambios.
+ 
+ + `vs`: tipo de motor, `recto:1` o `tipo V:0`.
+ 
+ + `disp`: El desplazamiento. 
+ 
+ + `am`: transmisión, `automático:0` o `manual:1`.
+ 
+ + `cyl`: número de cilindros.
+
+Todas las variables son numéricas, pero algunas son totalmente enteras, dificultando el proceso de análisis, se procede a revisar las correlaciones para revisar las interacciones lineales entre variables.
+
+```{r}
+#| label: fig-pairs
+#| fig-cap: "Gráfico de pares. La diagonal principal muestra histogramas densidades de cada una de las variables. La parte superior muestra el coeficiente de correlación entre dos variables, fila y columna. La parte inferior muestra un gráfico de dispersión entre dos variables."
+ggpairs(mtcars[,-c(8,9)])
+``` 
+  
+@fig-pairs muestra colinealidad entre las variables `mpg, hp` y `wt`. Por lo tanto, múltiples modelos deben ser considerados. 
+
+## Modelo inicial
+ 
+Para medir la relación de consumo de los motores utilizaremos GLM normal reducido obtenido en el [post anterior, modelo M3](https://asael697.github.io/ABM/posts/Gaussian-LM/). Para las priors, elegimos de tipo débil estándar, por lo tanto el modelo final es:
+
+$$mpg_i \sim N(\mu_i,\sigma^2), \quad  g(\mu_i) = \mu_i, \text{ y } \mu_i = \beta X_i.$$
+$$\mu_i = \beta_0 + \beta_1 wt+ \beta_2 gear + \beta_3 carb,$$
+Con priors:
+$$\beta_0 \sim \text{student-t}(4,0,10),$$
+ $$\beta _{[1:3]}\sim N(0,5),$$
+$$\sigma \sim Cauchy_+(0,3).$$
+El siguiente código corre un GLM Gaussiano, la sintaxis provista por el paquete `rstanarm` es bastante similar a la sintaxis de la librería estándar, con la diferencia de la especificación de las prior a utilizar; ademas, se debe especificar el numero de cadenas a correr `chains`, el numero de iteraciones por cadena `iter`, y el numero inicial de iteraciones a remover `warm.up`. En este caso utilizaremos los valores por defecto.
+
+```{r}
+bm1 = stan_glm(mpg~wt+gear+carb,data = mtcars,
+               prior = normal(0, 5),
+               prior_intercept = student_t(4, 0, 10),
+               prior_aux = cauchy(0, 3),
+               refresh = 0)
+
+summary(bm1)
+```
+
+El algoritmo por defecto utilizado en `Stan` es un MCMC, ver @metropolis1953 y @betancourt2017; y  por lo tanto, es necesario revisar la convergencia de las cadenas simuladas. Los indicadores por defecto son:
+
+   + **Monte Carlo standard error** (`mcse`): mide el error de la aproximación del estimador obtenido en métodos de Monte Carlo, y se calcula para la media $E[\theta |y]$.
+ 
+   + **Reducción de escala potencial, $\hat R$** (`Rhat`): compara las varianzas promedio de las cadenas con las varianzas inter-cadenas, valores aproximados a uno indican convergencia.
+
+   + **Effective sample size, ESS** (`n_eff`): Estima el tamaño de muestra de los estimadores asumiendo independencia, Este valor debe ser cercan al total de iteraciones realizado después del `warm.up`.
+
+En nuestro modelo observamos que nuestros errores de M.C. son muy cercanos a cero, los `Rhat` son todos uno, y los ESS son todos la mitad del total de iteraciones. En general el modelo parece no tener problemas, los ESS están un poco bajo, y esto se puede solventar aumentando el número de iteraciones o incrementando el `warm.up`. Para efectos de este estudio aceptaremos las aproximaciones obtenidas.
+
+Una de las ventajas de los métodos Bayesianos es que permite evaluar la incertidumbre de los estimadores de forma automática. El resultado del código anterior muestra los intervalos de credibilidad al 90%. 
+ 
+```{r}
+#| label: fig-post
+#| fig-cap: "Graficos de las posteriors. la columna izquierda muesrta las densidades de cada uno de los parámetros. En la columna derecha se muestran los traceplots, que son las simlaciones de las diferentes cadenas."
+mcmc_combo(x = bm1)
+```
+ 
+Es fácil visualizar las posteriors aproximadas mediante las cadenas obtenidas. @fig-post muestra los gráficos de densidad para cada uno de los parámetros y en la columna derecha muestra las cadenas simuladas, las cuales se han mezclado y lucen estacionarias, indicando convergencia. 
+ 
+```{r}
+#| label: fig-ppc
+#| fig-cap: "Gráfico de densidades sobrepuestos. Se comparan una muestra de la densidad predictiva *yrep* con la muestra de los datos *y* mediante densidades. Las densidades esta sobrepuestas muestran un buen ajuste del modelo."
+pp_check(bm1)+labs(title = "Posterior predictive cheks, M1",
+                   subtitle = "Overlayed densities")
+```
+ 
+Finalmente, revisamos el ajusto del modelo, para eso usamos posterior predictive checks, la idea es comparar la distribución de la densidad predictiva del modelo con la densidad aproximada de la muestra. @fig-ppc muestra la comparación de ambas densidades, ilustrando un buen ajuste del modelo.
+ 
+## Modelo completo con Horseshoe prior
+
+El nuevo modelo a considerar es un GLM Gaussiano, agregando mas covariables y utilizando un prior regularizadora de `Horseshoe` para las covariables. Por lo tanto el modelo es: 
+
+
+$$M_2: \ mpg_i \sim N(\mu_i,\sigma^2), \quad  g(\mu_i) = \mu_i, \text{ y } \mu_i = \beta X_i.$$
+$$\mu_i = \beta_0 + \beta_1 wt+ \beta_2 gear + \beta_3 carb + \beta_4 vs +\beta5 cyl +\beta_6 am,$$
+Con priors:
+$$\beta_0 \sim \text{student-t}(4,0,10),$$
+$$\sigma \sim Cauchy_+(0,3),$$
+$$\beta _{[1:6]}\sim N(0,\tau^2 _{[1:6]} \sigma^2_\beta),$$
+$$\tau^2 _{[1:6]} \sim Cauchy_+(0,1); \quad E[\sigma^2_\beta] = 0.01, \ V[\sigma^2_\beta] = 4.$$
+En este caso los valores globales `df` y `scale`, son hiper-parámetros que "regularizan" la `Horseshoe` prior a través de sus primeros dos momentos, para un mejor ajuste. El siguiente código presenta el modelo $M_2$. Debido a problemas de convergencia del modelo, es necesario aumentar `adapt_delta` de NUTS para un mejor salto en el HMC.
+
+```{r}
+#| warning: false
+bm2 = stan_glm(mpg~wt+gear+carb+vs+cyl+am,data = mtcars,
+               prior = hs(df = 1,global_df = 4,global_scale = 0.01),
+               prior_intercept = student_t(4, 0, 10),
+               prior_aux = cauchy(0, 3),
+               refresh = 0,adapt_delta = 0.99)
+
+summary(bm2)
+```
+
+Los indicadores convergencia parecen bien excepto para los coeficientes `wt` y `cyl` que son los valores no nulos del modelo, que debido a ser valores atípicos y que este tipo de priors fuerzan a cero los coeficientes, es natural que el HMC tenga problemas para explorar la posterior de estos parámetros.
+
+```{r}
+#| label: fig-diag2
+#| fig-cap: "Graficos de diagnósticos para el modelo completo con prior regularizadora de Horseshoe. Se presetan las densidades y traceplots de dos parametros con posteriors regularizadas (Nulas), y dos posteriors significativas. El gráfico derecho es un diagnóstico del ajuste del modelo usando densidades sobre-puestas; comparando una muestra de la densidad predictiva *yrep* con la muestra de los datos *y*"
+#| fig-subcap: 
+#|   - "Gráfico para las posteriors y traceplots de los parámetros nulos."
+#|   - "Posterior predictive checks: densidades sobre-puestas."
+#| layout-ncol: 2
+mcmc_combo(x = bm2,pars = c("gear","carb","cyl","wt"))
+
+rstanarm::pp_check(bm2)+labs(title = "Posterior predictive cheks, M2-Horeshoe",
+                   subtitle = "Overlayed densities")
+```
+
+@fig-diag2 parte (a) muestra las posteriors y traceplots para dos parámetros nulos (`gear` y `carb`) y dos parámetros significativos (`cyl` y `wt`). Los coeficientes nulos tienen posteriors con colas muy pesadas como se esperaba, pero los otros dos coeficientes tiene posteriors multi-modales indicando problemas de identificación u convergencia, para descartar el segundo problema se recomienda correr un mayor número de iteraciones.  La parte (b) muestra el ajuste del modelo, que se observa un mejor ajuste que el modelo anterior.
+
+## Modelo GAM completo
+
+$$M_3: \ mpg_i \sim N(\mu_i,\sigma^2), \quad  g(\mu_i) = \mu_i,\ \text{y } \mu_i = f_1(x_i)+f_2(hp_i)+f_3(disp_i),$$
+donde: 
+
+$$f_1(x_i) = \beta_0 + \beta_1 wt+ \beta_2 gear + \beta_3 carb + \beta_4 vs +\beta_5 cyl +\beta_6 am,$$
+$$f_2(hp_i) = \sum_{s=1}^{10}\beta_s b_s(hp), \ y \ f_3(disp_i) = \sum_{s=1}^{10}\beta_s b_s(disp).$$
+Con priors:
+
+$$\beta_0 \sim \text{student-t}(4,0,10),$$
+$$\beta _{[1:26]}\sim N(0,5),$$
+$$\sigma \sim Cauchy_+(0,3).$$
+El siguiente código presenta el modelo $M_3$.
+
+```{r}
+#| warning: false
+bm3 = stan_gamm4(mpg~wt+gear+carb+vs+cyl+am+s(hp)+s(disp),data = mtcars,
+               prior = normal(0,5),
+               prior_intercept = student_t(4, 0, 10),
+               prior_aux = cauchy(0, 3),
+               refresh = 0)
+```
+
+Dado que el numero de parámetros registrado es muy grande no presentaremos el resumen del modelo. Con respecto al diagnóstico de la aproximación MCMC, presentamos valores máximos, el mayor `mcse` fue de 0.2, todos los `Rhat` fueron igual a uno; y el menor `ess` fue de 1,224 iteraciones. Por lo tanto, aceptamos la aproximación obtenida.
+
+```{r}
+#| label: fig-diag3
+#| fig-cap: "Graficos de diagnósticos para el modelo completo con prior regularizadora de Horseshoe. Se presetan las densidades y traceplots de los parametros lineales. El gráfico derecho es un diagnóstico del ajuste del modelo usando densidades sobre-puestas; comparando una muestra de la densidad predictiva *yrep* con la muestra de los datos *y*"
+#| fig-subcap: 
+#|   - "Gráfico para las posteriors y traceplots de los parámetros nulos."
+#|   - "Posterior predictive checks: densidades sobre-puestas."
+#| layout-ncol: 2
+mcmc_combo(x = bm3,pars = c("gear","carb","cyl","wt"))
+
+rstanarm::pp_check(bm3)+labs(title = "Posterior predictive cheks, M3-GAM",
+                   subtitle = "Overlayed densities")
+```
+
+@fig-diag3 muestra las densidades y traceplots para todos los parámetros lineales, donde observamos convergencia y densidades unimodales. La parte derecha muestra el ajuste del modelo, con densidades sobre-puestas presentando un buen ajuste del modelo $M_3$. @fig-nl muestra los efectos no lineales marginales del modelo para las covariables `hp` y `disp`. Los efectos marginales son suaves y casi constantes, indicando que el aporte no lineal es muy poco.
+
+```{r}
+#| label: fig-nl
+#| fig-cap: "Efectos marginales no lineales. Estos graficos presentan las relacionnes no lineales de las variables designadas con los datos."
+plot_nonlinear(bm3)
+```
+
+## Leave-One-Out-Cross-Validation
+
+Para evaluar el aprendizaje de cada modelo estimaremos la expected log-predictive density (`elpd`) de cada modelo usando `LOO`, @vehtari2016, los modelos que consideraremos son cuatro:
+
+ + $M_1:$ Modelo Gaussiano reducido.
+ 
+ + $M_2:$ Modelo Gaussiano completo, `Horseshoe` prior.
+ 
+ + $M_3:$ Modelo Generalizado aditivo Gaussiano completo
+ 
+ + $M_4:$ Modelo Gaussiano completo, `LASSO` prior.
+ 
+El siguiente código muestra del modelo $M_4$ con un prior regularizadora de tipo LASSO. Con respecto al ajuste, el mayor `mcse` fue de 0.1. Todos los `Rhat` fueron igual a uno, y el menor `ess` fue de 1,230 iteraciones. A diferencia del modelo `Horseshoe` ($M_3$), este modelo no encontró covariables nulas, todas las variables aportan algo al modelo, por lo tanto falla en regularizar los parámetros.
+
+**Importante:** Que este modelo no regularice no implica que falle o es incorrecto. Este fenómeno se debe a que la prior `LASSO` tiene colas menos pesadas que la `Horseshoe` y por ende es más flexible.
+
+```{r}
+#| warning: false
+bm4 = stan_glm(mpg~wt+gear+carb+vs+cyl+am,data = mtcars,
+               prior = lasso(df = 1,location = 0,autoscale = TRUE),
+               prior_intercept = student_t(4, 0, 10),
+               prior_aux = cauchy(0, 3),
+               refresh = 0,adapt_delta = 0.99)
+```
+
+Ajustamos `LOO` para cada uno del modelo aproximando la `elpd` con muestreo por importancia de tipo Pareto (`PISIS`), en caso que una de las observaciones `PISIS` no converja ($\hat k \geq 0.7$), esta será calculada re ajustando el modelo nuevamente solamente en esa observación.
+
+```{r}
+#| message: false
+loo1 = loo(bm1,k_threshold = 0.7)
+loo2 = loo(bm2,k_threshold = 0.7)
+loo3 = loo(bm3,k_threshold = 0.7)
+loo4 = loo(bm4,k_threshold = 0.7)
+
+loo_compare(loo1,loo2,loo3,loo4)
+```
+
+Los resultados muestran que el mejor modelo es el modelo aditivo Generalizado (GAM) completo $M_3$ indicando que los efectos no lineales si influyen en el ajuste y predicción del modelo. 
+
+
+## Referencias
+
+---
+nocite: |
+ @Casella @degroot2012 @Miggon2014 @gelman2013 @BMLR2021 @BMCP2021 @gelman2020bayesian
+---
+
+::: {#refs}
+:::
